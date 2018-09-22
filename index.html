@@ -1,0 +1,170 @@
+<html>
+	<body style='margin: 0; height: 100%; width: 100%;'>
+		<div style='background-color: lightgray; height: 5%;'>
+			<input type='button' id='start' value='Start'>
+			<label>Height</label>
+			<input type='text' value='20' id='initialH'>
+			<label>Width</label>
+			<input type='text' value='' style='background-color: lightgray' disabled id='initialW'>
+			<input type='button' id='redraw' value='Resize'>
+			<label>Step time (ms)</label>
+			<input type='text' value='100' id='interval'>
+			<label>Tick #: <span id='tick'></span></label>
+		</div>
+		<canvas style='width: 100%; height: 95%; cursor: pointer' id='canvas'></canvas>
+
+		<script src='cgl.js'></script>
+		<script type="text/javascript">
+
+			// DOM Elements
+			let canvas = document.getElementById('canvas');
+			let input = document.getElementById('initialH');
+			let inputw = document.getElementById('initialW');
+			let start = document.getElementById('start');
+			let redraw = document.getElementById('redraw');
+			let inttime = document.getElementById('interval');
+			let tickn = document.getElementById('tick');
+
+			// preparing canvas
+			canvas.width = window.innerWidth;
+			canvas.height = window.innerHeight * 0.95;
+			let width = canvas.width;
+			let height = canvas.height;
+			let context = canvas.getContext("2d");
+
+			// Initial grid count (vertical)
+			let minBlocksH = 5;
+			let maxBlocksH = Math.floor(canvas.height/7);
+			let defaultBlocksH = 20;
+
+			// grid display params
+			let cellSize;
+			let blocksW;
+			let blocksH;
+			let paddingW;
+			let paddingH;
+
+			// tick time interval
+			let minInterval = 100;
+			let maxInterval = 5000;
+			let interval = false;
+			
+			// Game of Life itself (see cgl.js)
+			let cgl = new CGL();			
+
+			// Recalculate grid params based on desired height
+			function calcBlockSizes(cellsH)
+			{
+				blocksH = isNaN(cellsH)?defaultBlocksH:cellsH;
+				blocksH = (blocksH < minBlocksH)?minBlocksH:blocksH;
+				blocksH = (blocksH > maxBlocksH)?maxBlocksH:blocksH;
+				input.value = blocksH;	
+				cellSize = Math.floor(height/blocksH);
+				blocksW = Math.floor(width/cellSize);
+				inputw.value = blocksW;
+
+				paddingW = width - cellSize*blocksW;
+				paddingH = height - cellSize*blocksH;
+			}
+
+			// Draws a grid and a current data on a canvas (data - in for of one-dim array with w*h elems)
+			function drawGrid(data)
+			{
+				context.clearRect(0, 0, canvas.width, canvas.height);
+				context.strokeStyle = "gray";
+				context.fillStyle = "black";
+				context.lineWidth = 1;
+
+				data.forEach((v,i) => 
+				{
+					let y = Math.floor(i / blocksW);
+					let x = i%blocksW;
+
+					if (v)
+						context.fillRect( paddingW/2 + x*cellSize + 0.1 , paddingH/2 + y*cellSize + 0.1 ,cellSize,cellSize);
+					else
+						context.strokeRect( paddingW/2 + x*cellSize + 0.1 , paddingH/2 + y*cellSize + 0.1 ,cellSize,cellSize);
+				});
+			}
+
+			// Resizes and redraws data based on new desired field height
+			function refreshField(nh)
+			{
+				nh = nh?nh:blocksH;
+				calcBlockSizes(nh);
+				cgl.resize(blocksW, blocksH);
+
+				let dt = cgl.getCurrentData();
+				tickn.innerHTML = dt.t;
+				drawGrid(dt.d);		
+			}
+
+			// Fill the data in a canvas by clicking
+			canvas.addEventListener('click', function(event)
+			{
+			    let x = event.pageX - canvas.offsetLeft - paddingW/2;
+			    let y = event.pageY - canvas.offsetTop - paddingH/2;
+
+			    if (x < 0 || x > blocksW*cellSize || y < 0 || y > blocksH*cellSize)
+			    	return;
+
+			    x = Math.floor(x/cellSize);
+			    y = Math.floor(y/cellSize);
+
+			    cgl.setData(x, y, !cgl.getData(x,y));
+
+				let dt = cgl.getCurrentData();
+				drawGrid(dt.d);
+
+			}, false);
+
+			// Start/pause game
+			start.onclick = function()
+			{
+				if (!interval)
+				{
+					let time = parseInt(inttime.value);
+					time = isNaN(time)?minInterval:time;
+					time = (time < minInterval)?minInterval:time;
+					time = (time > maxInterval)?maxInterval:time;
+					inttime.value = time;		
+
+					interval = setInterval(() => 
+					{
+						// We need to resize field - we have some data on the edges
+						if (cgl.needsResize())
+							refreshField(blocksH + 5);
+
+						cgl.nextTick();
+						let dt = cgl.getCurrentData();
+						refreshField();
+					}, time);
+
+					start.value = "Pause";
+					input.disabled = true;
+					input.style.backgroundColor = 'lightgray';
+					inttime.disabled = true;
+					inttime.style.backgroundColor = 'lightgray';
+				}
+				else
+				{
+					clearInterval(interval);
+					interval = false;
+					start.value = "Start";
+					input.disabled = false;
+					input.style.backgroundColor = 'white';
+					inttime.disabled = false;
+					inttime.style.backgroundColor = 'white';
+				}
+			}
+
+			redraw.onclick = function()
+			{
+				refreshField( parseInt(input.value) );	
+			}
+
+			refreshField( parseInt(input.value) );
+
+		</script>
+	</body>
+</html>
